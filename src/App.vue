@@ -108,7 +108,12 @@
           </button>
           <div>
             Фильтр:
-            <input v-model="filter" />
+            <input
+              v-model="filter"
+              class="border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
+              type="text"
+              name="filter"
+            />
           </div>
         </div>
         <hr class="w-full border-t border-gray-600 my-4" />
