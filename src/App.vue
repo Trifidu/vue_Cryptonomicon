@@ -50,7 +50,7 @@
             </div>
             <div
               v-if="prediction.length > 0 && ticker.trim().length > 0"
-              class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"
+              class="flex bg-white shadow-md p-1 rounded-md flex-wrap"
             >
               <span
                 @click="predictionClickHandler(predictedCoin.Symbol)"
@@ -206,26 +206,33 @@ export default {
         currentTicker.name.length > 0
       ) {
         this.tickers.push(currentTicker);
-        this.fetchPrice(currentTicker);
+
+        localStorage.setItem(
+          "cryptonomicon-list",
+          JSON.stringify(this.tickers)
+        );
+
+        this.subscribeToUpdates(currentTicker.name);
         this.ticker = "";
       } else {
         this.valid = false;
       }
     },
 
-    fetchPrice(_ticker) {
+    subscribeToUpdates(tickerName) {
       const VUE_APP_CRYPTO_KEY =
         "7309c65b2b656c488a622361227a4be71c7c1d9cd3bec92ec9d4020dcedc4a53";
       const baseUrl = "https://min-api.cryptocompare.com/data/";
       setInterval(async () => {
         const f = await fetch(
-          `${baseUrl}price?fsym=${_ticker.name}&tsyms=USD&api_key=${VUE_APP_CRYPTO_KEY}}`
+          `${baseUrl}price?fsym=${tickerName}&tsyms=USD&api_key=${VUE_APP_CRYPTO_KEY}}`
         );
         const data = await f.json();
 
-        _ticker.price = data.USD;
-        console.log(_ticker.price);
-        if (this.sel?.name === _ticker.name) {
+        this.tickers.find((t) => t.name === tickerName).price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+
+        if (this.sel?.name === tickerName) {
           this.graph.push(data.USD);
         }
       }, 3000);
@@ -233,6 +240,7 @@ export default {
 
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t != tickerToRemove);
+      localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
     },
 
     select(ticker) {
@@ -280,6 +288,14 @@ export default {
 
   created: function () {
     this.fetchCoinList();
+
+    const tickersData = localStorage.getItem("cryptonomicon-list");
+    if (tickersData) {
+      this.tickers = JSON.parse(tickersData);
+      this.tickers.forEach((ticker) => {
+        this.subscribeToUpdates(ticker.name);
+      });
+    }
   },
 };
 </script>
