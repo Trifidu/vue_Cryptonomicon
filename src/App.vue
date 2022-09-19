@@ -132,7 +132,7 @@
                 {{ t.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ t.price }}
+                {{ formatPrice(t.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -206,8 +206,8 @@
 
 <script>
 // [x] Наличие в состоянии зависимых данных | 5+
-// [] При удалении остается подписка на загрузку тикера | 5
 // [] Запросы напрямую внутри компонента | 5
+// [] При удалении остается подписка на загрузку тикера | 5
 // [] Обработка ошибок API | 5
 // [] Количество запросов | 4
 // [x] При удалении тикера не удалется из локал стораджа | 4
@@ -225,6 +225,8 @@
 //  Убирать ДОБАВЛЕННЫЕ тикеры из подсказок
 //  Не сохраняется история по графикам (при смене графика)
 //  Выводить сообщение при фильтре, который не дал результата (пустой)
+
+import { subscribeToTicker, unsubscribeFromTicker } from "./api";
 
 export default {
   name: "App",
@@ -247,6 +249,31 @@ export default {
 
       page: 1,
     };
+  },
+
+  created: function () {
+    this.fetchCoinList();
+    const windowData = Object.fromEntries(
+      new URL(window.location).searchParams.entries()
+    );
+
+    const VALID_KEYS = ["filter", "page"];
+
+    VALID_KEYS.forEach((key) => {
+      if (windowData[key]) {
+        this[key] = windowData[key];
+      }
+    });
+
+    const tickersData = localStorage.getItem("cryptonomicon-list");
+    if (tickersData) {
+      this.tickers = JSON.parse(tickersData);
+      this.tickers.forEach((ticker) => {
+        subscribeToTicker(ticker.name, (newPrice) =>
+          this.updateTicker(ticker.name, newPrice)
+        );
+      });
+    }
   },
 
   computed: {
@@ -290,30 +317,22 @@ export default {
     },
   },
 
-  created: function () {
-    this.fetchCoinList();
-    const windowData = Object.fromEntries(
-      new URL(window.location).searchParams.entries()
-    );
-
-    const VALID_KEYS = ["filter", "page"];
-
-    VALID_KEYS.forEach((key) => {
-      if (windowData[key]) {
-        this[key] = windowData[key];
-      }
-    });
-
-    const tickersData = localStorage.getItem("cryptonomicon-list");
-    if (tickersData) {
-      this.tickers = JSON.parse(tickersData);
-      this.tickers.forEach((ticker) => {
-        this.subscribeToUpdates(ticker.name);
-      });
-    }
-  },
-
   methods: {
+    updateTicker(tickerName, price) {
+      this.tickers
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => {
+          t.price = price;
+        });
+    },
+
+    formatPrice(price) {
+      if (price === "-") {
+        return price;
+      }
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
+    },
+
     add() {
       const currentTicker = {
         name: this.ticker.trim().toUpperCase(),
@@ -325,32 +344,14 @@ export default {
         currentTicker.name.length > 0
       ) {
         this.tickers = [...this.tickers, currentTicker];
-        this.filter = "";
-
-        this.subscribeToUpdates(currentTicker.name);
         this.ticker = "";
+        this.filter = "";
+        subscribeToTicker(currentTicker.name, (newPrice) =>
+          this.updateTicker(currentTicker.name, newPrice)
+        );
       } else {
         this.valid = false;
       }
-    },
-
-    subscribeToUpdates(tickerName) {
-      const VUE_APP_CRYPTO_KEY =
-        "7309c65b2b656c488a622361227a4be71c7c1d9cd3bec92ec9d4020dcedc4a53";
-      const baseUrl = "https://min-api.cryptocompare.com/data/";
-      setInterval(async () => {
-        const f = await fetch(
-          `${baseUrl}price?fsym=${tickerName}&tsyms=USD&api_key=${VUE_APP_CRYPTO_KEY}}`
-        );
-        const data = await f.json();
-
-        this.tickers.find((t) => t.name === tickerName).price =
-          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-
-        if (this.selectedTicker?.name === tickerName) {
-          this.graph.push(data.USD);
-        }
-      }, 3000);
     },
 
     handleDelete(tickerToRemove) {
@@ -358,6 +359,7 @@ export default {
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
+      unsubscribeFromTicker(tickerToRemove.name);
     },
 
     select(ticker) {
